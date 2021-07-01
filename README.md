@@ -1,6 +1,6 @@
 # Pussy Financial Contracts
 
-![tests](https://github.com/Pussy-Financial/pussy-contracts/actions/workflows/master.yml/badge.svg)
+[![Test](https://github.com/Pussy-Financial/pussy-contracts/actions/workflows/workflow.yml/badge.svg)](https://github.com/Pussy-Financial/pussy-contracts/actions/workflows/workflow.yml)
 
 ## Overview
 
