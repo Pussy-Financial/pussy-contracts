@@ -1,6 +1,5 @@
 require('@nomiclabs/hardhat-waffle');
 require('@nomiclabs/hardhat-ethers');
-require('@typechain/hardhat');
 
 require('solidity-coverage');
 
