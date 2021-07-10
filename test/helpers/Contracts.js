@@ -1,23 +1,9 @@
 const { ethers } = require('hardhat');
 
-const deploy = async (contractName, ...args) => {
-    let signer = (await ethers.getSigners())[0];
+const deploy = async (contractName, ...args) =>
+    (await ethers.getContractFactory(contractName, (await ethers.getSigners())[0])).deploy(...(args || []));
 
-    if (typeof args[args.length - 1] === 'object' && args[args.length - 1].from) {
-        signer = args[args.length - 1].from;
-        if (typeof signer !== 'object' || signer.constructor.name !== 'SignerWithAddress') {
-            throw new Error('Signer must be SignerWithAddress');
-        }
-        args.pop();
-    }
-
-    const contractFactory = await ethers.getContractFactory(contractName, signer);
-    return args === undefined || args.length === 0 ? await contractFactory.deploy() : contractFactory.deploy(...args);
-};
-
-const attach = async (contractName, address) => {
-    return await ethers.getContractAt(contractName, address);
-};
+const attach = async (contractName, address) => ethers.getContractAt(contractName, address);
 
 const deployOrAttach = (contractName) => {
     return {
