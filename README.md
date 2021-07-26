@@ -8,7 +8,7 @@ PUSSY is an ERC20 token built on the Ethereum blockchain. The project was founde
 
 Ideas being currently pursued by the developers include a Pussy DAO, Arcade, Farming, Faucet, Studio, and charity partnerships.
 
-Join the Pussy Revolution at the official site <https://pussyfinancial.io>.
+Join the Pussy Revolution at the official site <https://pussy.financial/>.
 
 ## Contributors
 
