@@ -14,7 +14,7 @@ Join the Pussy Revolution at the official site <https://pussy.financial/>.
 
 -   HP @hwp9000
 -   Sheriff Pussy @sheriffpussy
--   Travis @travisodell
+-   loudcolorz.eth @travisodell
 -   moondev @pyssymoondev
 
 <div align="center">
