@@ -2,7 +2,7 @@
     "name": "pussy-contracts",
     "version": "101.0",
     "description": "PussyDAO Smart Contracts",
-    "author": "pussydev",
+    "author": "Pussy Financial Dev Team",
     "license": "MIT",
     "files": [
         "/contracts/**/*.sol",
