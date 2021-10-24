@@ -83,17 +83,31 @@ contract PussyFarm is IPussyFarm, Ownable {
     }
 
     /**
+     * @dev Returns the stake token.
+     */
+    function getStakeToken() external view override returns (IERC20) {
+        return _stakeToken;
+    }
+
+    /**
+     * @dev Returns the reward token.
+     */
+    function getRewardToken() external view override returns (IERC20) {
+        return _rewardToken;
+    }
+
+    /**
      * @dev Returns the current stake of a given account.
      */
     function getStake(address account) external view override returns (uint256) {
-        return (_stakes[account]);
+        return _stakes[account];
     }
 
     /**
      * @dev Returns the total claimed rewards amount for a given account.
      */
     function getClaimed(address account) external view override returns (uint256) {
-        return (_claimed[account]);
+        return _claimed[account];
     }
 
     /**

@@ -22,6 +22,10 @@ interface IPussyFarm {
             uint256
         );
 
+    function getStakeToken() external view returns (IERC20);
+
+    function getRewardToken() external view returns (IERC20);
+
     function getStake(address account) external view returns (uint256);
 
     function getClaimed(address account) external view returns (uint256);
