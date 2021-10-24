@@ -188,18 +188,24 @@ describe('PussyHODLFarm', () => {
             const prevAccountBalance = await stakeToken.balanceOf(account.address);
             const prevFarmBalance = await stakeToken.balanceOf(pussyHODLFarm.address);
             const prevClaimed = await pussyHODLFarm.getClaimed(account.address);
+            const claimable = await pussyHODLFarm.connect(account).callStatic.claim();
 
             const res = await pussyHODLFarm.connect(account).withdraw(amount);
             await expect(res).to.emit(pussyHODLFarm, 'Withdrawn').withArgs(account.address, amount);
+
+            if (claimable.gt(BigNumber.from(0))) {
+                await expect(res).to.emit(pussyHODLFarm, 'Claimed').withArgs(account.address, claimable);
+            }
 
             stakeAmounts[account.address] = stakeAmounts[account.address].sub(amount);
             totalStakedAmount = totalStakedAmount.sub(amount);
 
             expect(await stakeToken.balanceOf(account.address)).to.equal(prevAccountBalance.add(amount));
             expect(await stakeToken.balanceOf(pussyHODLFarm.address)).to.equal(prevFarmBalance.sub(amount));
-            expect(await pussyHODLFarm.getClaimed(account.address)).to.equal(prevClaimed);
+            expect(await pussyHODLFarm.getClaimed(account.address)).to.equal(prevClaimed.add(claimable));
             expect(await pussyHODLFarm.getStake(account.address)).to.equal(stakeAmounts[account.address]);
             expect(await pussyHODLFarm.getTotalStaked()).to.equal(totalStakedAmount);
+            expect(await pussyHODLFarm.getPendingRewards(account.address)).to.equal(BigNumber.from(0));
         };
 
         const claim = async (account) => {
@@ -433,32 +439,6 @@ describe('PussyHODLFarm', () => {
                             await withdraw(account3, BigNumber.from(1000));
                         });
 
-                        it('should not affect the rewards, when withdrawing in the same block', async () => {
-                            const account3 = accounts[3];
-
-                            await stake(
-                                account3,
-                                BigNumber.from(1000000).mul(BigNumber.from(10).pow(BigNumber.from(18)))
-                            );
-
-                            await setTime(programEndTime.add(duration.weeks(5)));
-
-                            const reward = await pussyHODLFarm.getPendingRewards(account.address);
-
-                            await withdraw(account, BigNumber.from(1000));
-                            await withdraw(account3, BigNumber.from(1000));
-
-                            expectAlmostEqual(await pussyHODLFarm.getPendingRewards(account.address), reward);
-
-                            await withdraw(account3, BigNumber.from(50000));
-
-                            expectAlmostEqual(await pussyHODLFarm.getPendingRewards(account.address), reward);
-
-                            await withdraw(account3, BigNumber.from(500000));
-
-                            expectAlmostEqual(await pussyHODLFarm.getPendingRewards(account.address), reward);
-                        });
-
                         it('should properly calculate all rewards when withdrawing', async () => {
                             await setTime(programStartTime);
 
@@ -469,111 +449,22 @@ describe('PussyHODLFarm', () => {
                                 BigNumber.from(1000000).mul(BigNumber.from(10).pow(BigNumber.from(18)))
                             );
 
-                            let prevReward = await pussyHODLFarm.getPendingRewards(account.address);
+                            const prevReward = await pussyHODLFarm.getPendingRewards(account.address);
 
                             await setTime(programEndTime.add(duration.seconds(1)));
                             await testPartialRewards(account, prevReward);
-
-                            prevReward = await pussyHODLFarm.getPendingRewards(account.address);
 
                             await withdraw(account, BigNumber.from(500000));
                             await withdraw(account3, BigNumber.from(500000));
 
                             await setTime(now.add(duration.days(1)));
-                            await testPartialRewards(account, prevReward);
-
-                            prevReward = await pussyHODLFarm.getPendingRewards(account.address);
 
                             await withdraw(account, BigNumber.from(100000));
 
                             await setTime(now.add(duration.days(1)));
-                            await testPartialRewards(account, prevReward);
-
-                            prevReward = await pussyHODLFarm.getPendingRewards(account.address);
 
                             await withdraw(account, BigNumber.from(200000));
                             await withdraw(account3, BigNumber.from(300000));
-
-                            await setTime(now.add(duration.weeks(3)));
-                            await testPartialRewards(account, prevReward, duration.weeks(3));
-                        });
-
-                        it('should keep all rewards when withdrawing', async () => {
-                            await setTime(programEndTime.add(duration.weeks(1)));
-
-                            const unclaimed = await pussyHODLFarm.getPendingRewards(account.address);
-                            expect(unclaimed).to.equal(expectedRelativeRewards(account));
-
-                            const prevBalance = await stakeToken.balanceOf(account.address);
-                            const staked = await pussyHODLFarm.getStake(account.address);
-                            await withdraw(account, staked);
-                            expect(await stakeToken.balanceOf(account.address)).to.equal(prevBalance.add(staked));
-
-                            let reward = await pussyHODLFarm.getPendingRewards(account.address);
-                            expectAlmostEqual(reward, unclaimed);
-
-                            await setTime(now.add(duration.weeks(1)));
-                            reward = await pussyHODLFarm.getPendingRewards(account.address);
-                            expectAlmostEqual(reward, unclaimed);
-
-                            await setTime(now.add(duration.weeks(2)));
-                            reward = await pussyHODLFarm.getPendingRewards(account.address);
-                            expectAlmostEqual(reward, unclaimed);
-                        });
-
-                        it('should keep all rewards when partially withdrawing', async () => {
-                            await setTime(programEndTime.add(duration.weeks(1)));
-
-                            const unclaimed = await pussyHODLFarm.getPendingRewards(account.address);
-                            expect(unclaimed).to.equal(expectedRelativeRewards(account));
-
-                            const prevBalance = await stakeToken.balanceOf(account.address);
-                            const staked = await pussyHODLFarm.getStake(account.address);
-                            await withdraw(account, staked.div(2));
-                            expect(await stakeToken.balanceOf(account.address)).to.equal(
-                                prevBalance.add(staked.div(2))
-                            );
-
-                            let reward = await pussyHODLFarm.getPendingRewards(account.address);
-                            expectAlmostEqual(reward, unclaimed);
-
-                            await setTime(now.add(duration.weeks(1)));
-                            reward = await pussyHODLFarm.getPendingRewards(account.address);
-                            expectAlmostEqual(reward, unclaimed);
-
-                            await setTime(now.add(duration.weeks(1)));
-                            reward = await pussyHODLFarm.getPendingRewards(account.address);
-                            expectAlmostEqual(reward, unclaimed);
-
-                            await setTime(now.add(duration.weeks(1)));
-                            reward = await pussyHODLFarm.getPendingRewards(account.address);
-                            expectAlmostEqual(reward, unclaimed);
-                        });
-
-                        it('should allow claiming rewards after withdrawal', async () => {
-                            await setTime(programEndTime.add(duration.weeks(1)));
-
-                            const unclaimed = await pussyHODLFarm.getPendingRewards(account.address);
-                            expect(unclaimed).to.equal(expectedRelativeRewards(account));
-
-                            const prevBalance = await rewardToken.balanceOf(account.address);
-                            await withdraw(account, await pussyHODLFarm.getStake(account.address));
-                            expect(await rewardToken.balanceOf(account.address)).to.equal(prevBalance);
-
-                            const reward = await pussyHODLFarm.getPendingRewards(account.address);
-
-                            expectAlmostEqual(reward, unclaimed);
-
-                            const claimed = await pussyHODLFarm.connect(account).callStatic.claim();
-                            expect(claimed).to.equal(reward);
-                            const prevBalance2 = await rewardToken.balanceOf(account.address);
-                            const tx = await pussyHODLFarm.connect(account).claim();
-                            if (claimed.gt(BigNumber.from(0))) {
-                                await expect(tx).to.emit(pussyHODLFarm, 'Claimed').withArgs(account.address, claimed);
-                            }
-                            expect(await rewardToken.balanceOf(account.address)).to.equal(prevBalance2.add(reward));
-
-                            expect(await pussyHODLFarm.getPendingRewards(account.address)).to.equal(BigNumber.from(0));
                         });
                     });
                 });

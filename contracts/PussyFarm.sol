@@ -137,6 +137,8 @@ contract PussyFarm is IPussyFarm, Ownable {
     function withdraw(uint256 amount) public virtual override updateReward {
         require(amount > 0, "INVALID_AMOUNT");
 
+        claim();
+
         _stakes[msg.sender] = _stakes[msg.sender].sub(amount);
         _totalStaked = _totalStaked.sub(amount);
 
@@ -155,7 +157,7 @@ contract PussyFarm is IPussyFarm, Ownable {
     /**
      * @dev Claims pending rewards and sends them to the owner.
      */
-    function claim() external virtual override updateReward returns (uint256) {
+    function claim() public virtual override updateReward returns (uint256) {
         uint256 reward = _pendingRewards(msg.sender);
         if (reward == 0) {
             return reward;

@@ -99,7 +99,7 @@ describe('PussyFarm', () => {
                     stakeToken.address,
                     rewardToken.address,
                     BigNumber.from(0),
-                    now.add(BigNumber.from(10)),
+                    now.add(BigNumber.from(100)),
                     BigNumber.from(0)
                 )
             ).to.be.revertedWith('INVALID_VALUE');
@@ -188,18 +188,24 @@ describe('PussyFarm', () => {
             const prevAccountBalance = await stakeToken.balanceOf(account.address);
             const prevFarmBalance = await stakeToken.balanceOf(pussyFarm.address);
             const prevClaimed = await pussyFarm.getClaimed(account.address);
+            const claimable = await pussyFarm.connect(account).callStatic.claim();
 
             const res = await pussyFarm.connect(account).withdraw(amount);
             await expect(res).to.emit(pussyFarm, 'Withdrawn').withArgs(account.address, amount);
+
+            if (claimable.gt(BigNumber.from(0))) {
+                await expect(res).to.emit(pussyFarm, 'Claimed').withArgs(account.address, claimable);
+            }
 
             stakeAmounts[account.address] = stakeAmounts[account.address].sub(amount);
             totalStakedAmount = totalStakedAmount.sub(amount);
 
             expect(await stakeToken.balanceOf(account.address)).to.equal(prevAccountBalance.add(amount));
             expect(await stakeToken.balanceOf(pussyFarm.address)).to.equal(prevFarmBalance.sub(amount));
-            expect(await pussyFarm.getClaimed(account.address)).to.equal(prevClaimed);
+            expect(await pussyFarm.getClaimed(account.address)).to.equal(prevClaimed.add(claimable));
             expect(await pussyFarm.getStake(account.address)).to.equal(stakeAmounts[account.address]);
             expect(await pussyFarm.getTotalStaked()).to.equal(totalStakedAmount);
+            expect(await pussyFarm.getPendingRewards(account.address)).to.equal(BigNumber.from(0));
         };
 
         const claim = async (account) => {
@@ -217,9 +223,9 @@ describe('PussyFarm', () => {
             const prevFarmBalance = await rewardToken.balanceOf(pussyFarm.address);
             const prevClaimed = await pussyFarm.getClaimed(account.address);
 
-            const tx = await pussyFarm.connect(account).claim();
+            const res = await pussyFarm.connect(account).claim();
             if (claimable.gt(BigNumber.from(0))) {
-                await expect(tx).to.emit(pussyFarm, 'Claimed').withArgs(account.address, claimable);
+                await expect(res).to.emit(pussyFarm, 'Claimed').withArgs(account.address, claimable);
             }
 
             expect(await pussyFarm.getPendingRewards(account.address)).to.equal(BigNumber.from(0));
@@ -256,11 +262,16 @@ describe('PussyFarm', () => {
             expect(reward).to.equal(expectedReward);
         };
 
-        const testPartialRewards = async (account, prevReward) => {
+        const testPartialRewards = async (account, prevReward, duration = BigNumber.from(0)) => {
             const reward = await pussyFarm.getPendingRewards(account.address);
 
-            const effectiveTime = BigNumber.min(now, programEndTime);
-            const extraReward = expectedRewards(account, effectiveTime.sub(prevNow));
+            let extraReward;
+            if (duration.eq(BigNumber.from(0))) {
+                const effectiveTime = BigNumber.min(now, programEndTime);
+                extraReward = expectedRewards(account, effectiveTime.sub(prevNow));
+            } else {
+                extraReward = expectedRewards(account, duration);
+            }
 
             expectAlmostEqual(prevReward.add(extraReward), reward);
         };
@@ -359,7 +370,7 @@ describe('PussyFarm', () => {
                             );
 
                             await setTime(now.add(duration.weeks(2)));
-                            await testPartialRewards(account, prevReward, duration.weeks(2));
+                            await testPartialRewards(account, prevReward);
                         });
 
                         it('should properly calculate new stake rewards after the program has ended', async () => {
@@ -410,32 +421,6 @@ describe('PussyFarm', () => {
                             await setTime(programStartTime);
                         });
 
-                        it('should not affect the rewards, when withdrawing in the same block', async () => {
-                            const account3 = accounts[3];
-
-                            await stake(
-                                account3,
-                                BigNumber.from(1000000).mul(BigNumber.from(10).pow(BigNumber.from(18)))
-                            );
-
-                            await setTime(programStartTime.add(duration.weeks(5)));
-
-                            const reward = await pussyFarm.getPendingRewards(account.address);
-
-                            await withdraw(account, BigNumber.from(1000));
-                            await withdraw(account3, BigNumber.from(1000));
-
-                            expectAlmostEqual(await pussyFarm.getPendingRewards(account.address), reward);
-
-                            await withdraw(account3, BigNumber.from(50000));
-
-                            expectAlmostEqual(await pussyFarm.getPendingRewards(account.address), reward);
-
-                            await withdraw(account3, BigNumber.from(500000));
-
-                            expectAlmostEqual(await pussyFarm.getPendingRewards(account.address), reward);
-                        });
-
                         it('should properly calculate all rewards when withdrawing', async () => {
                             await setTime(programStartTime);
 
@@ -446,111 +431,27 @@ describe('PussyFarm', () => {
                                 BigNumber.from(1000000).mul(BigNumber.from(10).pow(BigNumber.from(18)))
                             );
 
-                            let prevReward = await pussyFarm.getPendingRewards(account.address);
+                            const prevReward = await pussyFarm.getPendingRewards(account.address);
 
                             await setTime(now.add(duration.seconds(1)));
                             await testPartialRewards(account, prevReward);
 
-                            prevReward = await pussyFarm.getPendingRewards(account.address);
-
                             await withdraw(account, BigNumber.from(500000));
                             await withdraw(account3, BigNumber.from(500000));
 
-                            await setTime(now.add(duration.days(1)));
-                            await testPartialRewards(account, prevReward);
-
-                            prevReward = await pussyFarm.getPendingRewards(account.address);
+                            await setTime(now.add(duration.days(4)));
+                            await testPartialRewards(account, BigNumber.from(0), duration.days(4));
 
                             await withdraw(account, BigNumber.from(100000));
 
                             await setTime(now.add(duration.days(1)));
-                            await testPartialRewards(account, prevReward);
-
-                            prevReward = await pussyFarm.getPendingRewards(account.address);
+                            await testPartialRewards(account, BigNumber.from(0), duration.days(1));
 
                             await withdraw(account, BigNumber.from(200000));
                             await withdraw(account3, BigNumber.from(300000));
 
                             await setTime(now.add(duration.weeks(3)));
-                            await testPartialRewards(account, prevReward, duration.weeks(3));
-                        });
-
-                        it('should keep all rewards when withdrawing', async () => {
-                            await setTime(programStartTime.add(duration.weeks(1)));
-
-                            const unclaimed = await pussyFarm.getPendingRewards(account.address);
-                            expect(unclaimed).to.equal(expectedRewards(account, duration.weeks(1)));
-
-                            const prevBalance = await stakeToken.balanceOf(account.address);
-                            const staked = await pussyFarm.getStake(account.address);
-                            await withdraw(account, staked);
-                            expect(await stakeToken.balanceOf(account.address)).to.equal(prevBalance.add(staked));
-
-                            let reward = await pussyFarm.getPendingRewards(account.address);
-                            expectAlmostEqual(reward, unclaimed);
-
-                            await setTime(now.add(duration.weeks(1)));
-                            reward = await pussyFarm.getPendingRewards(account.address);
-                            expectAlmostEqual(reward, expectedRewards(account, duration.weeks(1)).add(unclaimed));
-
-                            await setTime(now.add(duration.weeks(2)));
-                            reward = await pussyFarm.getPendingRewards(account.address);
-                            expectAlmostEqual(reward, expectedRewards(account, duration.weeks(3)).add(unclaimed));
-                        });
-
-                        it('should keep all rewards when partially withdrawing', async () => {
-                            await setTime(programStartTime.add(duration.weeks(1)));
-
-                            const unclaimed = await pussyFarm.getPendingRewards(account.address);
-                            expect(unclaimed).to.equal(expectedRewards(account, duration.weeks(1)));
-
-                            const prevBalance = await stakeToken.balanceOf(account.address);
-                            const staked = await pussyFarm.getStake(account.address);
-                            await withdraw(account, staked.div(2));
-                            expect(await stakeToken.balanceOf(account.address)).to.equal(
-                                prevBalance.add(staked.div(2))
-                            );
-
-                            let reward = await pussyFarm.getPendingRewards(account.address);
-                            expectAlmostEqual(reward, unclaimed);
-
-                            await setTime(now.add(duration.weeks(1)));
-                            reward = await pussyFarm.getPendingRewards(account.address);
-                            expectAlmostEqual(reward, expectedRewards(account, duration.weeks(1)).add(unclaimed));
-
-                            await setTime(now.add(duration.weeks(1)));
-                            reward = await pussyFarm.getPendingRewards(account.address);
-                            expectAlmostEqual(reward, expectedRewards(account, duration.weeks(2)).add(unclaimed));
-
-                            await setTime(now.add(duration.weeks(1)));
-                            reward = await pussyFarm.getPendingRewards(account.address);
-                            expectAlmostEqual(reward, expectedRewards(account, duration.weeks(3)).add(unclaimed));
-                        });
-
-                        it('should allow claiming rewards after withdrawal', async () => {
-                            await setTime(programStartTime.add(duration.weeks(1)));
-
-                            const unclaimed = await pussyFarm.getPendingRewards(account.address);
-                            expect(unclaimed).to.equal(expectedRewards(account, duration.weeks(1)));
-
-                            const prevBalance = await rewardToken.balanceOf(account.address);
-                            await withdraw(account, await pussyFarm.getStake(account.address));
-                            expect(await rewardToken.balanceOf(account.address)).to.equal(prevBalance);
-
-                            const reward = await pussyFarm.getPendingRewards(account.address);
-
-                            expectAlmostEqual(reward, unclaimed);
-
-                            const claimed = await pussyFarm.connect(account).callStatic.claim();
-                            expect(claimed).to.equal(reward);
-                            const prevBalance2 = await rewardToken.balanceOf(account.address);
-                            const tx = await pussyFarm.connect(account).claim();
-                            if (claimed.gt(BigNumber.from(0))) {
-                                await expect(tx).to.emit(pussyFarm, 'Claimed').withArgs(account.address, claimed);
-                            }
-                            expect(await rewardToken.balanceOf(account.address)).to.equal(prevBalance2.add(reward));
-
-                            expect(await pussyFarm.getPendingRewards(account.address)).to.equal(BigNumber.from(0));
+                            await testPartialRewards(account, BigNumber.from(0), duration.weeks(3));
                         });
                     });
                 });
