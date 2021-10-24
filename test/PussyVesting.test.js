@@ -340,7 +340,7 @@ describe('PussyVesting', () => {
 
                 const description = JSON.stringify(
                     program,
-                    (key, value) => {
+                    (_, value) => {
                         const { type, hex } = value;
                         if (type === 'BigNumber') {
                             return BigNumber.from(hex).toString();
