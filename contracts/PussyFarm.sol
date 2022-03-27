@@ -1,17 +1,15 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.7.6;
+pragma solidity 0.8.13;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/math/Math.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "./IPussyFarm.sol";
 
 contract PussyFarm is IPussyFarm, Ownable {
     using Math for uint256;
-    using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
     uint256 private constant RATE_FACTOR = 1e18;
@@ -79,7 +77,7 @@ contract PussyFarm is IPussyFarm, Ownable {
             uint256
         )
     {
-        return (_startTime, _endTime, _rewardRate, _endTime.sub(_startTime).mul(_rewardRate));
+        return (_startTime, _endTime, _rewardRate, (_endTime - _startTime) * _rewardRate);
     }
 
     /**
@@ -123,8 +121,8 @@ contract PussyFarm is IPussyFarm, Ownable {
     function stake(uint256 amount) public virtual override updateReward {
         require(amount > 0, "INVALID_AMOUNT");
 
-        _stakes[msg.sender] = _stakes[msg.sender].add(amount);
-        _totalStaked = _totalStaked.add(amount);
+        _stakes[msg.sender] += amount;
+        _totalStaked += amount;
 
         _stakeToken.safeTransferFrom(msg.sender, address(this), amount);
 
@@ -139,8 +137,8 @@ contract PussyFarm is IPussyFarm, Ownable {
 
         claim();
 
-        _stakes[msg.sender] = _stakes[msg.sender].sub(amount);
-        _totalStaked = _totalStaked.sub(amount);
+        _stakes[msg.sender] -= amount;
+        _totalStaked -= amount;
 
         _stakeToken.safeTransfer(msg.sender, amount);
 
@@ -164,7 +162,7 @@ contract PussyFarm is IPussyFarm, Ownable {
         }
 
         _rewards[msg.sender] = 0;
-        _claimed[msg.sender] = _claimed[msg.sender].add(reward);
+        _claimed[msg.sender] += reward;
 
         _rewardToken.safeTransfer(msg.sender, reward);
 
@@ -178,7 +176,7 @@ contract PussyFarm is IPussyFarm, Ownable {
      */
     function withdrawTokens(IERC20 token, uint256 amount) external onlyOwner {
         require(
-            address(token) != address(_stakeToken) || amount <= token.balanceOf(address(this)).sub(_totalStaked),
+            address(token) != address(_stakeToken) || amount <= token.balanceOf(address(this)) - _totalStaked,
             "INVALID_AMOUNT"
         );
 
@@ -204,10 +202,7 @@ contract PussyFarm is IPussyFarm, Ownable {
             return _rewardPerTokenStored;
         }
 
-        return
-            _rewardPerTokenStored.add(
-                stakingEndTime.sub(stakingStartTime).mul(_rewardRate).mul(RATE_FACTOR).div(_totalStaked)
-            );
+        return _rewardPerTokenStored + ((stakingEndTime - stakingStartTime) * _rewardRate * RATE_FACTOR) / _totalStaked;
     }
 
     /**
@@ -215,9 +210,9 @@ contract PussyFarm is IPussyFarm, Ownable {
      */
     function _pendingRewards(address account) private view returns (uint256) {
         return
-            _stakes[account].mul(_rewardPerToken().sub(_stakerRewardPerTokenPaid[account])).div(RATE_FACTOR).add(
-                _rewards[account]
-            );
+            (_stakes[account] * (_rewardPerToken() - _stakerRewardPerTokenPaid[account])) /
+            RATE_FACTOR +
+            _rewards[account];
     }
 
     /**
