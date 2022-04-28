@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.7.6;
+pragma solidity 0.8.13;
 
-import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract PussyVesting is Ownable {
-    using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
     struct Program {
@@ -79,7 +77,7 @@ contract PussyVesting is Ownable {
 
         _programs[owner] = Program({ amount: amount, start: start, cliff: cliff, end: end, claimed: 0 });
 
-        _totalVesting = _totalVesting.add(amount);
+        _totalVesting += amount;
 
         emit ProgramCreated(owner, amount);
     }
@@ -92,7 +90,7 @@ contract PussyVesting is Ownable {
 
         require(p.amount > 0, "INVALID_ADDRESS");
 
-        _totalVesting = _totalVesting.sub(p.amount.sub(p.claimed));
+        _totalVesting -= p.amount - p.claimed;
 
         delete _programs[owner];
 
@@ -118,9 +116,9 @@ contract PussyVesting is Ownable {
             return;
         }
 
-        p.claimed = p.claimed.add(unclaimed);
+        p.claimed += unclaimed;
 
-        _totalVesting = _totalVesting.sub(unclaimed);
+        _totalVesting -= unclaimed;
 
         _token.safeTransfer(msg.sender, unclaimed);
 
@@ -153,7 +151,7 @@ contract PussyVesting is Ownable {
             return 0;
         }
 
-        return vested.sub(p.claimed);
+        return vested - p.claimed;
     }
 
     /**
@@ -171,7 +169,7 @@ contract PussyVesting is Ownable {
         }
 
         // Interpolate vesting: claimable = amount * ((time - start) / (end - start)).
-        return p.amount.mul(time.sub(p.start)).div(p.end.sub(p.start));
+        return (p.amount * (time - p.start)) / (p.end - p.start);
     }
 
     /**
